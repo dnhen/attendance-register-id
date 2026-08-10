@@ -1,0 +1,10 @@
+{
+  "name": "Cadet Attendance ID",
+  "short_name": "Cadet ID Roll",
+  "description": "Offline cadet attendance scanner using numeric cadet IDs",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#eef2f7",
+  "theme_color": "#172554",
+  "orientation": "portrait-primary"
+}
