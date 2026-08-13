@@ -10,7 +10,7 @@
   <title>Cadet Attendance ID</title>
   <link rel="manifest" href="manifest.webmanifest">
   <style>[hidden]{display:none!important}</style>
-  <link rel="stylesheet" href="styles.css?v=20260810-1">
+  <link rel="stylesheet" href="styles.css?v=20260813-1">
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
 <body>
@@ -45,9 +45,9 @@
     </section>
 
     <section class="manual-card active-only">
-      <label for="manualName">Manual ID entry</label>
+      <label for="manualName">Manual entry</label>
       <div class="manual-row">
-        <input id="manualName" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Cadet ID number">
+        <input id="manualName" type="text" autocomplete="off" autocapitalize="words" placeholder="Cadet ID number or cadet name">
         <button id="addManual" class="primary">Add</button>
       </div>
     </section>
@@ -117,7 +117,7 @@
     <button id="closeDuplicate" class="primary">OK</button>
   </dialog>
 
-  <footer class="version-label">ID Version 2.3.1</footer>
-  <script src="app.js?v=20260810-1"></script>
+  <footer class="version-label">ID Version 2.3.2</footer>
+  <script src="app.js?v=20260813-1"></script>
 </body>
 </html>

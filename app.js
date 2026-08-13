@@ -24,7 +24,9 @@ function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.dat
 function currentActivity() { return state.data.activities.find(a => a.id === state.currentActivityId) || null; }
 function normaliseId(value) { return String(value ?? '').trim(); }
 function validId(value) { return /^\d+$/.test(value); }
+function normaliseName(value) { return String(value ?? '').trim().replace(/\s+/g, ' '); }
 function duplicateKey(value) { return normaliseId(value); }
+function duplicateNameKey(value) { return normaliseName(value).toLocaleLowerCase('en-AU'); }
 function formatTime(iso) { return new Intl.DateTimeFormat('en-AU', { hour:'2-digit', minute:'2-digit', second:'2-digit' }).format(new Date(iso)); }
 function formatDateTime(iso) { return new Intl.DateTimeFormat('en-AU', { dateStyle:'medium', timeStyle:'short' }).format(new Date(iso)); }
 function setStatus(message, kind='normal') {
@@ -32,25 +34,53 @@ function setStatus(message, kind='normal') {
   el('status').style.background = kind === 'success' ? '#dcfce7' : kind === 'error' ? '#fee2e2' : '#eef2ff';
 }
 
-function addCadet(rawId, method) {
+function addCadet(rawValue, method) {
   const activity = currentActivity();
   if (!activity || activity.closedAt) return;
-  const cadetId = normaliseId(rawId);
-  if (!cadetId) return setStatus('Enter or scan a cadet ID.', 'error');
-  if (!validId(cadetId)) return setStatus('Invalid ID. QR codes and manual entries must contain numbers only.', 'error');
-  const existing = activity.records.find(r => duplicateKey(r.cadetId) === duplicateKey(cadetId));
-  if (existing) {
-    el('duplicateText').textContent = `ID ${existing.cadetId} was already recorded at ${formatTime(existing.arrivedAt)}.`;
-    el('duplicateDialog').showModal();
-    setStatus(`Duplicate ignored: ${existing.cadetId}`, 'error');
+
+  const value = String(rawValue ?? '').trim();
+  if (!value) return setStatus('Enter or scan a cadet ID, or type a cadet name for manual entry.', 'error');
+
+  const isQr = method === 'QR';
+  const isNumeric = validId(value);
+
+  // QR codes remain strictly numeric. Names are only allowed through manual entry.
+  if (isQr && !isNumeric) {
+    return setStatus('Invalid QR code. This version only accepts numeric cadet IDs from QR codes.', 'error');
+  }
+
+  if (isNumeric) {
+    const cadetId = normaliseId(value);
+    const existing = activity.records.find(r => r.entryType !== 'name' && duplicateKey(r.cadetId) === duplicateKey(cadetId));
+    if (existing) {
+      el('duplicateText').textContent = `ID ${existing.cadetId} was already recorded at ${formatTime(existing.arrivedAt)}.`;
+      el('duplicateDialog').showModal();
+      setStatus(`Duplicate ignored: ${existing.cadetId}`, 'error');
+      return;
+    }
+    activity.records.push({ id:makeId(), entryType:'id', cadetId, manualName:'', arrivedAt:new Date().toISOString(), method, pcf:false });
+    saveData(); render();
+    setStatus(`Added ID: ${cadetId}`, 'success');
+    if (navigator.vibrate) navigator.vibrate(80);
     return;
   }
-  activity.records.push({ id: makeId(), cadetId, arrivedAt: new Date().toISOString(), method, pcf:false });
-  saveData(); render();
-  setStatus(`Added ID: ${cadetId}`, 'success');
-  if (navigator.vibrate) navigator.vibrate(80);
-}
 
+  if (isQr) return;
+
+  const manualName = normaliseName(value);
+  if (manualName.length < 2) return setStatus('Enter a cadet name, or a numeric cadet ID.', 'error');
+  const existingName = activity.records.find(r => r.entryType === 'name' && duplicateNameKey(r.manualName) === duplicateNameKey(manualName));
+  if (existingName) {
+    el('duplicateText').textContent = `${existingName.manualName} was already entered manually at ${formatTime(existingName.arrivedAt)}.`;
+    el('duplicateDialog').showModal();
+    setStatus(`Duplicate manual name ignored: ${manualName}`, 'error');
+    return;
+  }
+
+  activity.records.push({ id:makeId(), entryType:'name', cadetId:'', manualName, arrivedAt:new Date().toISOString(), method:'Manual Name', pcf:false });
+  saveData(); render();
+  setStatus(`Added manual name: ${manualName}`, 'success');
+}
 function render() {
   const activity = currentActivity();
   if (!activity) { el('appMain').hidden = true; return; }
@@ -70,13 +100,19 @@ function render() {
   document.querySelectorAll('.active-only').forEach(node => node.hidden = isClosed);
   el('emptyMessage').hidden = activity.records.length > 0;
   const records = [...activity.records];
-  if (state.sortMode === 'alphabetical') records.sort((a,b) => a.cadetId.localeCompare(b.cadetId, 'en-AU', { numeric:true }));
-  else records.sort((a,b) => new Date(a.arrivedAt) - new Date(b.arrivedAt));
+  if (state.sortMode === 'alphabetical') {
+    records.sort((a,b) => {
+      const aKey = a.entryType === 'name' ? (a.manualName || '') : (a.cadetId || '');
+      const bKey = b.entryType === 'name' ? (b.manualName || '') : (b.cadetId || '');
+      return aKey.localeCompare(bKey, 'en-AU', { numeric:true, sensitivity:'base' });
+    });
+  } else records.sort((a,b) => new Date(a.arrivedAt) - new Date(b.arrivedAt));
   el('attendanceList').replaceChildren(...records.map((record, index) => {
     const li = document.createElement('li');
     li.className = activity.type === 'other' ? 'with-pcf' : '';
     li.innerHTML = `<span class="index">${index+1}</span><div><div class="name"></div><div class="meta">${formatTime(record.arrivedAt)} · ${record.method}</div></div>`;
-    li.querySelector('.name').textContent = `ID ${record.cadetId}`;
+    const isManualName = record.entryType === 'name' || (!record.cadetId && record.manualName);
+    li.querySelector('.name').textContent = isManualName ? `${record.manualName} (manual name)` : `ID ${record.cadetId}`;
     if (activity.type === 'other') {
       const label = document.createElement('label'); label.className = 'pcf-check';
       const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = Boolean(record.pcf); checkbox.disabled = Boolean(activity.closedAt);
@@ -85,18 +121,20 @@ function render() {
       li.appendChild(label);
     }
     if (!activity.closedAt) {
-      const remove = document.createElement('button'); remove.className = 'remove'; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove ID ${record.cadetId}`);
+      const remove = document.createElement('button'); remove.className = 'remove'; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove ${isManualName ? record.manualName : `ID ${record.cadetId}`}`);
       remove.addEventListener('click', () => removeRecord(record.id)); li.appendChild(remove);
     }
     return li;
   }));
-  el('sortToggle').textContent = state.sortMode === 'arrival' ? 'Sort: Arrival' : 'Sort: ID';
+  el('sortToggle').textContent = state.sortMode === 'arrival' ? 'Sort: Arrival' : 'Sort: ID / Name';
 }
 
 function removeRecord(id) {
   const activity = currentActivity();
   const record = activity?.records.find(r => r.id === id);
-  if (!record || activity.closedAt || !confirm(`Remove ID ${record.cadetId} from attendance?`)) return;
+  if (!record || activity.closedAt) return;
+  const label = record.entryType === 'name' ? record.manualName : `ID ${record.cadetId}`;
+  if (!confirm(`Remove ${label} from attendance?`)) return;
   activity.records = activity.records.filter(r => r.id !== id); saveData(); render();
 }
 
@@ -142,23 +180,37 @@ function safeFilename(value) { return value.replace(/[^a-z0-9._-]+/gi, '-').repl
 function exportCsv() {
   const activity = currentActivity();
   if (!activity?.records.length) return setStatus('There are no attendance records to export.', 'error');
-  const sorted = [...activity.records].sort((a,b) => new Date(a.arrivedAt) - new Date(b.arrivedAt));
-  const header = ['ID','Arrival Date','Arrival Time','Entry Method'];
+
+  // Put all ID records first in arrival order, then all manually entered names in arrival order.
+  const byArrival = (a,b) => new Date(a.arrivedAt) - new Date(b.arrivedAt);
+  const idRecords = activity.records.filter(r => r.entryType !== 'name').sort(byArrival);
+  const manualNameRecords = activity.records.filter(r => r.entryType === 'name').sort(byArrival);
+  const sorted = [...idRecords, ...manualNameRecords];
+
+  const header = ['ID','Manual Name','Arrival Date','Arrival Time','Entry Method'];
   if (activity.type === 'other') header.push('PCF');
   const rows = [header];
+
   for (const r of sorted) {
     const d = new Date(r.arrivedAt);
-    const row = [r.cadetId, new Intl.DateTimeFormat('en-CA').format(d), formatTime(r.arrivedAt), r.method];
+    const isManualName = r.entryType === 'name';
+    const row = [
+      isManualName ? '' : (r.cadetId || ''),
+      isManualName ? (r.manualName || '') : '',
+      new Intl.DateTimeFormat('en-CA').format(d),
+      formatTime(r.arrivedAt),
+      isManualName ? 'Manual Name' : r.method
+    ];
     if (activity.type === 'other') row.push(r.pcf ? 'Yes' : 'No');
     rows.push(row);
   }
+
   const csv = '\uFEFF' + rows.map(row => row.map(csvEscape).join(',')).join('\r\n');
   const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
   const file = new File([blob], `${safeFilename(activity.name)}.csv`, { type:'text/csv' });
   if (navigator.share && navigator.canShare?.({ files:[file] })) navigator.share({ files:[file], title:activity.name }).catch(() => {});
   else { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download=file.name; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); }
 }
-
 function createActivity() {
   const type = el('activityType').value;
   const name = el('activityName').value.trim() || (type === 'home' ? defaultActivityName() : `Other Activity ${todayISO()}`);

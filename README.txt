@@ -1,18 +1,18 @@
-CADET ATTENDANCE ID WEB APP - VERSION 2.3.1-ID
+CADET ATTENDANCE ID WEB APP - VERSION 2.3.2-ID
 
 PURPOSE
-This is the ID-only alternative to the name-based Attendance Register.
-QR codes must contain only a numeric cadet ID, for example: 123456
+This is the ID-based Attendance Register. QR codes must contain only a numeric cadet ID, for example: 123456. If a cadet arrives without a QR code and does not know their ID, staff may type the cadet name manually.
 
 FEATURES
 - Rear-camera QR scanning on iPhone, iPad and compatible Android devices
 - QR contents expected as digits only
-- Manual numeric ID entry
-- Duplicate ID detection
-- Chronological or ID-number sorting
+- Manual entry accepts either a numeric cadet ID or a cadet name
+- Manually entered names are clearly marked in the on-screen attendance list
+- Duplicate ID detection and duplicate manual-name detection
+- Chronological or ID/name sorting
 - Present count
 - Home Training Parade and Other Activity types
-- PCF checkbox for Other Activity records
+- PCF checkbox for Other Activity records, including manual-name records
 - Activity resume logic for sessions reopened within two hours
 - Activity Closed mode
 - Past activity viewing
@@ -21,11 +21,18 @@ FEATURES
 - Offline app shell after the first successful online load
 
 CSV FORMAT
-Home Training Parade:
-ID,Arrival Date,Arrival Time,Entry Method
+All CSV files contain:
+ID,Manual Name,Arrival Date,Arrival Time,Entry Method
 
-Other Activity:
-ID,Arrival Date,Arrival Time,Entry Method,PCF
+Other Activities add a final PCF column.
+
+ID records are exported first in arrival order. Any manually entered names are deliberately moved to the END of the CSV in their own arrival order, with the ID field blank and Entry Method set to Manual Name. This allows staff to identify and resolve them manually.
+
+Example:
+ID,Manual Name,Arrival Date,Arrival Time,Entry Method
+123456,,2026-08-13,18:42:15,QR
+123789,,2026-08-13,18:43:02,Manual
+,Smith John,2026-08-13,18:45:11,Manual Name
 
 DEPLOYMENT
 Upload all files in this folder directly to the root of the GitHub repository:
