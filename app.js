@@ -34,6 +34,26 @@ function setStatus(message, kind='normal') {
   el('status').style.background = kind === 'success' ? '#dcfce7' : kind === 'error' ? '#fee2e2' : '#eef2ff';
 }
 
+// Lazily-created AudioContext used to play a short confirmation "ding" on a successful scan.
+let audioCtx = null;
+function playDing() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.3, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.16);
+  } catch {}
+}
+
 function addCadet(rawValue, method) {
   const activity = currentActivity();
   if (!activity || activity.closedAt) return;
@@ -62,6 +82,7 @@ function addCadet(rawValue, method) {
     saveData(); render();
     setStatus(`Added ID: ${cadetId}`, 'success');
     if (navigator.vibrate) navigator.vibrate(80);
+    if (isQr) playDing();
     return;
   }
 
@@ -181,31 +202,17 @@ function exportCsv() {
   const activity = currentActivity();
   if (!activity?.records.length) return setStatus('There are no attendance records to export.', 'error');
 
-  // Put all ID records first in arrival order, then all manually entered names in arrival order.
+  // Only exports numeric cadet IDs, in arrival order, as a single comma-separated line
+  // (manual name entries have no ID and are excluded from this export).
   const byArrival = (a,b) => new Date(a.arrivedAt) - new Date(b.arrivedAt);
-  const idRecords = activity.records.filter(r => r.entryType !== 'name').sort(byArrival);
-  const manualNameRecords = activity.records.filter(r => r.entryType === 'name').sort(byArrival);
-  const sorted = [...idRecords, ...manualNameRecords];
+  const ids = activity.records
+    .filter(r => r.entryType !== 'name' && r.cadetId)
+    .sort(byArrival)
+    .map(r => r.cadetId);
 
-  const header = ['ID','Manual Name','Arrival Date','Arrival Time','Entry Method'];
-  if (activity.type === 'other') header.push('PCF');
-  const rows = [header];
+  if (!ids.length) return setStatus('There are no cadet IDs to export.', 'error');
 
-  for (const r of sorted) {
-    const d = new Date(r.arrivedAt);
-    const isManualName = r.entryType === 'name';
-    const row = [
-      isManualName ? '' : (r.cadetId || ''),
-      isManualName ? (r.manualName || '') : '',
-      new Intl.DateTimeFormat('en-CA').format(d),
-      formatTime(r.arrivedAt),
-      isManualName ? 'Manual Name' : r.method
-    ];
-    if (activity.type === 'other') row.push(r.pcf ? 'Yes' : 'No');
-    rows.push(row);
-  }
-
-  const csv = '\uFEFF' + rows.map(row => row.map(csvEscape).join(',')).join('\r\n');
+  const csv = ids.join(',');
   const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
   const file = new File([blob], `${safeFilename(activity.name)}.csv`, { type:'text/csv' });
   if (navigator.share && navigator.canShare?.({ files:[file] })) navigator.share({ files:[file], title:activity.name }).catch(() => {});
