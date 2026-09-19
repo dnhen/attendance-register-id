@@ -1,4 +1,4 @@
-CADET ATTENDANCE ID WEB APP - VERSION 2.3.2-ID
+CADET ATTENDANCE ID WEB APP - VERSION 2.3.3-ID
 
 PURPOSE
 This is the ID-based Attendance Register. QR codes must contain only a numeric cadet ID, for example: 123456. If a cadet arrives without a QR code and does not know their ID, staff may type the cadet name manually.
@@ -6,6 +6,7 @@ This is the ID-based Attendance Register. QR codes must contain only a numeric c
 FEATURES
 - Rear-camera QR scanning on iPhone, iPad and compatible Android devices
 - QR contents expected as digits only
+- Vibration and a short audible confirmation (ding) on every successful QR scan
 - Manual entry accepts either a numeric cadet ID or a cadet name
 - Manually entered names are clearly marked in the on-screen attendance list
 - Duplicate ID detection and duplicate manual-name detection
@@ -21,18 +22,10 @@ FEATURES
 - Offline app shell after the first successful online load
 
 CSV FORMAT
-All CSV files contain:
-ID,Manual Name,Arrival Date,Arrival Time,Entry Method
-
-Other Activities add a final PCF column.
-
-ID records are exported first in arrival order. Any manually entered names are deliberately moved to the END of the CSV in their own arrival order, with the ID field blank and Entry Method set to Manual Name. This allows staff to identify and resolve them manually.
+The CSV export is a single line of comma-separated cadet IDs only, in arrival order, with no header row. Manually entered names (which have no numeric ID) are excluded from the export, since there is no ID for staff to reconcile against the register.
 
 Example:
-ID,Manual Name,Arrival Date,Arrival Time,Entry Method
-123456,,2026-08-13,18:42:15,QR
-123789,,2026-08-13,18:43:02,Manual
-,Smith John,2026-08-13,18:45:11,Manual Name
+123456,123789,129034,120495
 
 DEPLOYMENT
 Upload all files in this folder directly to the root of the GitHub repository:
@@ -40,7 +33,7 @@ Attendance-Register-ID
 
 Enable GitHub Pages from the main branch and /(root).
 The expected web app URL is:
-https://mrqueeg.github.io/Attendance-Register-ID/
+https://dnhen.github.io/attendance-register-id/
 
 IMPORTANT
 This ID version uses its own localStorage key and does not read or alter the name-based app's attendance records.
